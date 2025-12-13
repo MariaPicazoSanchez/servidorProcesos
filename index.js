@@ -9,8 +9,8 @@ const cors = require("cors");
 
 require('dotenv').config();
 
-const PORT = process.env.PORT || 3001;
-const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:3000';
+const PORT = process.env.PORT;
+const CORS_ORIGIN = process.env.CORS_ORIGIN;
 
 app.use(cors({
   origin: CORS_ORIGIN,
