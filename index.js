@@ -191,7 +191,8 @@ app.get("/good", function(req, res) {
       console.log("[/good] nick final:", nickToSet);
       if (DEBUG_AUTH) console.log('[GOOD] setting session/cookie', { email, nick: nickToSet });
       res.cookie('nick', nickToSet);
-      res.redirect(`${URL}/`);
+      // Pasar nick en URL porque cookies cross-domain no funcionan en navegadores modernos
+      res.redirect(`${URL}/?nick=${encodeURIComponent(nickToSet)}`);
     });
   });
 });
