@@ -461,6 +461,26 @@ app.get('/api/logs', async function(req, res) {
     return res.status(500).json({ error: "Error al obtener logs" });
   }
 });
+// Simple health/env summary (no secrets)
+app.get('/health', (req, res) => {
+  try {
+    const summary = {
+      PORT: !!process.env.PORT,
+      SESSION_SECRET: !!process.env.SESSION_SECRET,
+      CORS_ORIGIN: process.env.CORS_ORIGIN || null,
+      APP_URL: process.env.APP_URL || null,
+      GOOGLE_CLIENT_ID: !!(process.env.GOOGLE_CLIENT_ID || process.env.CLIENT_ID || process.env.GOOGLE_OAUTH_CLIENT_ID),
+      GOOGLE_CLIENT_SECRET: !!(process.env.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_ONE_TAP_CLIENT_SECRET),
+      GOOGLE_CALLBACK_URL: process.env.GOOGLE_CALLBACK_URL || null,
+      ONE_TAP_CALLBACK_URL: process.env.ONE_TAP_CALLBACK_URL || process.env.ONE_TAP_LOGIN_URI || null,
+      DEBUG_AUTH: String(process.env.DEBUG_AUTH || '').toLowerCase() === 'true',
+      NODE_ENV: process.env.NODE_ENV || null
+    };
+    res.status(200).json({ ok: true, summary });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e && e.message });
+  }
+});
 // ------------------------------------
 // Iniciar el servidor
 // ------------------------------------
