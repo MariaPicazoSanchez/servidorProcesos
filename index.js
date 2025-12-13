@@ -18,9 +18,15 @@ app.use(cors({
   credentials: true
 }));
 
-const URL = process.env.APP_URL;
+const APP_URL = process.env.APP_URL;
 const passport=require("passport");
 const session = require('express-session');
+
+function redirectClient(res, path = "/", query = {}) {
+  const u = new URL(path, APP_URL);
+  for (const [k, v] of Object.entries(query)) u.searchParams.set(k, v);
+  return res.redirect(u.toString());
+}
 
 require("./server/passport-setup.js");
 const modelo = require("./server/modelo.js");
@@ -135,7 +141,7 @@ const haIniciado = function(request, response, next){
   console.warn('[haIniciado] acceso no autorizado:', { path: request.path, method: request.method, ip: request.ip });
 
   // Si no hay usuario, redirigimos al cliente (/) como indica el ejemplo
-  return response.redirect(`${URL}/`);
+  return response.redirect(`${APP_URL}/`);
 };
 
 // --------------------
@@ -191,16 +197,16 @@ app.get("/good", function(req, res) {
       console.log("[/good] nick final:", nickToSet);
       if (DEBUG_AUTH) console.log('[GOOD] setting session/cookie', { email, nick: nickToSet });
       res.cookie('nick', nickToSet);
-      // Pasar nick en URL porque cookies cross-domain no funcionan en navegadores modernos
-      res.redirect(`${URL}/?nick=${encodeURIComponent(nickToSet)}`);
+      // Pasar nick en APP_URL porque cookies cross-domain no funcionan en navegadores modernos
+      res.redirect(`${APP_URL}/?nick=${encodeURIComponent(nickToSet)}`);
     });
   });
 });
 
 app.get("/fallo", function(req, res) {
   console.error("[/fallo] Redirigiendo, usuario no autenticado correctamente");
-  if (DEBUG_AUTH) console.log('[FALLO] redirect', { target: `${URL}/fallo` });
-  res.redirect(`${URL}/fallo`);
+  if (DEBUG_AUTH) console.log('[FALLO] redirect', { target: `${APP_URL}/fallo` });
+  res.redirect(`${APP_URL}/fallo`);
 });
 
 app.get("/agregarUsuario/:nick", haIniciado, function(request, response) {
@@ -256,7 +262,7 @@ app.get('/salir', function(req, res){
     res.clearCookie('nick');
     const acceptsJson = req.xhr || (req.headers.accept && req.headers.accept.indexOf('application/json') !== -1);
     if (acceptsJson) return res.json({ ok: true });
-    return res.redirect(`${URL}/`);
+    return res.redirect(`${APP_URL}/`);
   }
 });
 
@@ -272,24 +278,24 @@ app.post('/oneTap/callback', (req, res, next) => {
   }
   if (!req.body.credential) {
     console.error('[oneTap] sin credential');
-    return res.status(400).json({ redirect: `${URL}/fallo`, error: 'missing_credential' });
+    return res.status(400).json({ redirect: `${APP_URL}/fallo`, error: 'missing_credential' });
   }
   
   passport.authenticate('google-one-tap', (err, user, info) => {
     if (err) {
       console.error('[oneTap] error:', err);
       if (DEBUG_AUTH) console.log('[oneTap] info:', info);
-      return res.status(401).json({ redirect: `${URL}/fallo`, error: 'auth_failed' });
+      return res.status(401).json({ redirect: `${APP_URL}/fallo`, error: 'auth_failed' });
     }
     if (!user) {
       console.warn('[oneTap] no user de strategy');
-      return res.status(401).json({ redirect: `${URL}/fallo`, error: 'no_user' });
+      return res.status(401).json({ redirect: `${APP_URL}/fallo`, error: 'no_user' });
     }
     
     req.login(user, (loginErr) => {
       if (loginErr) {
         console.error('[oneTap] login error:', loginErr);
-        return res.status(401).json({ redirect: `${URL}/fallo`, error: 'login_error' });
+        return res.status(401).json({ redirect: `${APP_URL}/fallo`, error: 'login_error' });
       }
       
       let email = null;
@@ -303,13 +309,13 @@ app.post('/oneTap/callback', (req, res, next) => {
       
       if (!email) {
         console.error('[oneTap] sin email');
-        return res.status(401).json({ redirect: `${URL}/fallo`, error: 'no_email' });
+        return res.status(401).json({ redirect: `${APP_URL}/fallo`, error: 'no_email' });
       }
       
       sistema.usuarioGoogle({ email, displayName }, function(obj) {
         if (!obj || !obj.email) {
           console.error('[oneTap] usuarioGoogle fallo');
-          return res.status(401).json({ redirect: `${URL}/fallo`, error: 'usuarioGoogle_failed' });
+          return res.status(401).json({ redirect: `${APP_URL}/fallo`, error: 'usuarioGoogle_failed' });
         }
         try {
           req.session.user = { email };
@@ -318,7 +324,7 @@ app.post('/oneTap/callback', (req, res, next) => {
           console.warn('[oneTap] cookie error:', e.message);
         }
         if (DEBUG_AUTH) console.log('[oneTap] success', { email, nick: obj.nick || email });
-        return res.status(200).json({ redirect: `${URL}/?nick=${encodeURIComponent(obj.nick || email)}` });
+        return res.status(200).json({ redirect: `${APP_URL}/?nick=${encodeURIComponent(obj.nick || email)}` });
       });
     });
   })(req, res, next);
@@ -408,7 +414,7 @@ app.get("/confirmarUsuario/:email/:key", (req, res) => {
     } else {
       console.log("[/confirmarUsuario] confirmación fallida:", usr);
     }
-    res.redirect(`${URL}/`);
+    res.redirect(`${APP_URL}/`);
   };
 
   // Procesar la confirmación
