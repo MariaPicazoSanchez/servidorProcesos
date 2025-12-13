@@ -11,6 +11,7 @@ require('dotenv').config();
 
 const PORT = process.env.PORT;
 const CORS_ORIGIN = process.env.CORS_ORIGIN;
+const DEBUG_AUTH = String(process.env.DEBUG_AUTH || '').toLowerCase() === 'true';
 
 app.use(cors({
   origin: CORS_ORIGIN,
@@ -36,6 +37,30 @@ let io = new Server(httpServer, {
   }
 });
 let ws = new moduloWS.ServidorWS();
+
+// Request logger (conditional)
+if (DEBUG_AUTH) {
+  app.use((req, res, next) => {
+    const start = process.hrtime.bigint();
+    const origin = req.headers.origin;
+    const referer = req.headers.referer || req.headers.referrer;
+    const ua = req.headers['user-agent'];
+    const cookiesPresent = !!(req.headers.cookie);
+    const cookieNames = (req.headers.cookie || '').split(';').map(s => s.trim().split('=')[0]).filter(Boolean);
+    const hasSessionId = !!(req.session && req.session.id);
+    const hasReqUser = !!req.user;
+    const hasSessionUser = !!(req.session && req.session.user);
+
+    console.log('[REQ]', { method: req.method, path: req.path, origin, referer, ua, cookiesPresent, cookieNames, hasSessionId, hasReqUser, hasSessionUser });
+
+    res.on('finish', () => {
+      const end = process.hrtime.bigint();
+      const ms = Number((end - start) / 1000000n);
+      console.log('[RES]', { path: req.path, status: res.statusCode, timeMs: ms });
+    });
+    next();
+  });
+}
 
 // --------------------
 // Juegos 
@@ -118,13 +143,16 @@ const haIniciado = function(request, response, next){
 // --------------------
 
 app.get("/auth/google",
-    passport.authenticate('google', { scope: ['profile','email'] })
+  (req, res, next) => { if (DEBUG_AUTH) console.log('[AUTH/GOOGLE] start', { origin: req.headers.origin, referer: req.headers.referer }); next(); },
+  passport.authenticate('google', { scope: ['profile','email'] })
 );
 
 app.get('/google/callback',
-    passport.authenticate('google', {failureRedirect: '/fallo'}),
-    function(req, res) {
-        res.redirect('/good'); 
+  (req, res, next) => { if (DEBUG_AUTH) console.log('[GOOGLE/CALLBACK] enter'); next(); },
+  passport.authenticate('google', {failureRedirect: '/fallo'}),
+  function(req, res) {
+    if (DEBUG_AUTH) console.log('[GOOGLE/CALLBACK] success');
+    res.redirect('/good'); 
 });
 
 app.get("/good", function(req, res) {
@@ -161,6 +189,7 @@ app.get("/good", function(req, res) {
       }
       const nickToSet = obj.nick || email;
       console.log("[/good] nick final:", nickToSet);
+      if (DEBUG_AUTH) console.log('[GOOD] setting session/cookie', { email, nick: nickToSet });
       res.cookie('nick', nickToSet);
       res.redirect(`${URL}/`);
     });
@@ -169,6 +198,7 @@ app.get("/good", function(req, res) {
 
 app.get("/fallo", function(req, res) {
   console.error("[/fallo] Redirigiendo, usuario no autenticado correctamente");
+  if (DEBUG_AUTH) console.log('[FALLO] redirect', { target: `${URL}/fallo` });
   res.redirect(`${URL}/fallo`);
 });
 
@@ -233,6 +263,12 @@ app.get('/salir', function(req, res){
 // One Tap: callback
 app.post('/oneTap/callback', (req, res, next) => {
   console.log('[oneTap/callback] credential presente:', !!req.body.credential);
+  if (DEBUG_AUTH) {
+    const cred = req.body.credential || '';
+    const prefix = cred.substring(0, 10);
+    const suffix = cred.substring(Math.max(0, cred.length - 4));
+    console.log('[oneTap/callback] detail', { len: cred.length, prefix, suffix });
+  }
   if (!req.body.credential) {
     console.error('[oneTap] sin credential');
     return res.status(400).json({ redirect: `${URL}/fallo`, error: 'missing_credential' });
@@ -241,6 +277,7 @@ app.post('/oneTap/callback', (req, res, next) => {
   passport.authenticate('google-one-tap', (err, user, info) => {
     if (err) {
       console.error('[oneTap] error:', err);
+      if (DEBUG_AUTH) console.log('[oneTap] info:', info);
       return res.status(401).json({ redirect: `${URL}/fallo`, error: 'auth_failed' });
     }
     if (!user) {
@@ -279,6 +316,7 @@ app.post('/oneTap/callback', (req, res, next) => {
         } catch (e) {
           console.warn('[oneTap] cookie error:', e.message);
         }
+        if (DEBUG_AUTH) console.log('[oneTap] success', { email, nick: obj.nick || email });
         return res.status(200).json({ redirect: `${URL}/` });
       });
     });
@@ -466,5 +504,25 @@ function startServer(port){
 }
 
 startServer(PORT);
+
+// Socket.IO connection log
+io.on('connection', (socket) => {
+  if (DEBUG_AUTH) {
+    const h = socket.handshake || {};
+    const hdrs = h.headers || {};
+    console.log('[WS] connection', { id: socket.id, origin: hdrs.origin, ua: hdrs['user-agent'] });
+  }
+  socket.on('disconnect', (reason) => {
+    if (DEBUG_AUTH) console.log('[WS] disconnect', { id: socket.id, reason });
+  });
+});
+
+// Global error handlers
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', { reason: (reason && reason.message) || String(reason) });
+});
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', { error: err && err.message });
+});
 
 
