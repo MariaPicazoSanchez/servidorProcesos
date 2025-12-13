@@ -15,7 +15,12 @@ const DEBUG_AUTH = String(process.env.DEBUG_AUTH || '').toLowerCase() === 'true'
 
 app.use(cors({
   origin: CORS_ORIGIN,
-  credentials: true
+  credentials: true,
+  cookie: {
+    secure: true,
+    httpOnly: true,
+    sameSite: 'none'
+  }
 }));
 
 const APP_URL = process.env.APP_URL;
