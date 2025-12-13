@@ -318,7 +318,7 @@ app.post('/oneTap/callback', (req, res, next) => {
           console.warn('[oneTap] cookie error:', e.message);
         }
         if (DEBUG_AUTH) console.log('[oneTap] success', { email, nick: obj.nick || email });
-        return res.status(200).json({ redirect: `${URL}/` });
+        return res.status(200).json({ redirect: `${URL}/?nick=${encodeURIComponent(obj.nick || email)}` });
       });
     });
   })(req, res, next);
