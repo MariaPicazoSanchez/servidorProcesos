@@ -14,13 +14,32 @@ const CORS_ORIGIN = process.env.CORS_ORIGIN;
 const DEBUG_AUTH = String(process.env.DEBUG_AUTH || '').toLowerCase() === 'true';
 
 app.use(cors({
-  origin: CORS_ORIGIN,
+  origin: function(origin, callback) {
+    // Permitir requests sin origin (como herramientas de desarrollo)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [CORS_ORIGIN];
+    // También permitir el dominio del APP_URL
+    if (APP_URL) {
+      try {
+        const appOrigin = new URL(APP_URL).origin;
+        if (!allowedOrigins.includes(appOrigin)) {
+          allowedOrigins.push(appOrigin);
+        }
+      } catch(e) {}
+    }
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn('[CORS] origin no permitido:', origin);
+      callback(null, false);
+    }
+  },
   credentials: true,
-  cookie: {
-    secure: true,
-    httpOnly: true,
-    sameSite: 'none'
-  }
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['set-cookie']
 }));
 
 const APP_URL = process.env.APP_URL;
@@ -202,7 +221,16 @@ app.get("/good", function(req, res) {
       const nickToSet = obj.nick || email;
       console.log("[/good] nick final:", nickToSet);
       if (DEBUG_AUTH) console.log('[GOOD] setting session/cookie', { email, nick: nickToSet });
-      res.cookie('nick', nickToSet);
+      
+      // Configurar cookie con opciones para cross-domain
+      res.cookie('nick', nickToSet, {
+        maxAge: 24 * 60 * 60 * 1000, // 24 horas
+        httpOnly: false, // debe ser false para que JavaScript pueda leerla
+        secure: IN_PROD, // true solo en producción
+        sameSite: IN_PROD ? 'none' : 'lax', // 'none' en producción requiere secure:true
+        domain: undefined // no especificar domain para que funcione en subdominios
+      });
+      
       // Pasar nick en APP_URL porque cookies cross-domain no funcionan en navegadores modernos
       res.redirect(`${APP_URL}/?nick=${encodeURIComponent(nickToSet)}`);
     });
@@ -325,7 +353,14 @@ app.post('/oneTap/callback', (req, res, next) => {
         }
         try {
           req.session.user = { email };
-          res.cookie('nick', obj.nick || email);
+          const nickToSet = obj.nick || email;
+          res.cookie('nick', nickToSet, {
+            maxAge: 24 * 60 * 60 * 1000, // 24 horas
+            httpOnly: false, // debe ser false para que JavaScript pueda leerla
+            secure: IN_PROD, // true solo en producción
+            sameSite: IN_PROD ? 'none' : 'lax', // 'none' en producción requiere secure:true
+            domain: undefined // no especificar domain para que funcione en subdominios
+          });
         } catch (e) {
           console.warn('[oneTap] cookie error:', e.message);
         }
