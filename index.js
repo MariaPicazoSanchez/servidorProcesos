@@ -11,7 +11,7 @@ require('dotenv').config();
 
 const PORT = process.env.PORT;
 const CORS_ORIGIN = process.env.CORS_ORIGIN;
-const DEBUG_AUTH = String(process.env.DEBUG_AUTH || '').toLowerCase() === 'true';
+const DEBUG_AUTH = String(process.env.DEBUG_AUTH || '').toLowerCase() === 'true' || process.env.NODE_ENV !== 'production';
 
 app.use(cors({
   origin: function(origin, callback) {
@@ -150,20 +150,41 @@ app.use(session({
 
 app.use(passport.initialize());
 app.use(passport.session());
+
 const haIniciado = function(request, response, next){
+  if (DEBUG_AUTH) {
+    console.log('[haIniciado] verificando auth:', {
+      path: request.path,
+      method: request.method,
+      hasSession: !!request.session,
+      sessionId: request.session?.id,
+      sessionUser: request.session?.user,
+      isAuthenticated: typeof request.isAuthenticated === 'function' ? request.isAuthenticated() : 'N/A',
+      reqUser: request.user ? { id: request.user.id, displayName: request.user.displayName } : null,
+      cookies: request.headers.cookie ? 'presente' : 'ausente'
+    });
+  }
+  
   try{
     const isAuth = (typeof request.isAuthenticated === 'function' && request.isAuthenticated())
                     || !!request.user
                     || !!(request.session && request.session.user);
 
     if (isAuth){
+      if (DEBUG_AUTH) console.log('[haIniciado] autenticado, permitiendo acceso');
       return next();
     }
   }catch(e){
     console.warn('[haIniciado] error comprobando auth:', e && e.message);
   }
 
-  console.warn('[haIniciado] acceso no autorizado:', { path: request.path, method: request.method, ip: request.ip });
+  console.warn('[haIniciado] acceso no autorizado:', { 
+    path: request.path, 
+    method: request.method, 
+    ip: request.ip,
+    hasSession: !!request.session,
+    sessionId: request.session?.id
+  });
 
   // Si no hay usuario, redirigimos al cliente (/) como indica el ejemplo
   return response.redirect(`${APP_URL}/`);
@@ -215,6 +236,19 @@ app.get("/good", function(req, res) {
       }
       try {
         req.session.user = { email };
+        console.log("[/good] sesión actualizada:", { 
+          sessionId: req.session.id, 
+          sessionUser: req.session.user,
+          isAuthenticated: req.isAuthenticated ? req.isAuthenticated() : 'N/A'
+        });
+        // Guardar la sesión explícitamente
+        req.session.save(function(err) {
+          if (err) {
+            console.error("[/good] ERROR guardando sesión:", err);
+          } else {
+            console.log("[/good] sesión guardada exitosamente");
+          }
+        });
       } catch(e) {
         console.warn("[/good] session.user error:", e && e.message);
       }
@@ -243,29 +277,29 @@ app.get("/fallo", function(req, res) {
   res.redirect(`${APP_URL}/fallo`);
 });
 
-app.get("/agregarUsuario/:nick", haIniciado, function(request, response) {
+app.get("/agregarUsuario/:nick", function(request, response) {
   let nick = request.params.nick;
   let res = sistema.agregarUsuario(nick);
   response.send(res);
 });
 
-app.get("/obtenerUsuarios", haIniciado, function(request, response) {
+app.get("/obtenerUsuarios", function(request, response) {
   let res = sistema.obtenerUsuarios();
   response.send(res);
 });
 
-app.get("/usuarioActivo/:nick", haIniciado, function(request, response) {
+app.get("/usuarioActivo/:nick", function(request, response) {
   let nick = request.params.nick;
   let res = { activo: sistema.usuarioActivo(nick) };
   response.send(res);
 });
 
-app.get("/numeroUsuarios", haIniciado, function(request, response) {
+app.get("/numeroUsuarios", function(request, response) {
   let res = { num: sistema.numeroUsuarios() };
   response.send(res);
 });
 
-app.get("/eliminarUsuario/:nick", haIniciado, function(request, response) {
+app.get("/eliminarUsuario/:nick", function(request, response) {
   let nick = request.params.nick;
   sistema.eliminarUsuario(nick);
   response.send({ eliminado: nick });
