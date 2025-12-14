@@ -122,7 +122,7 @@ app.use(session({
     // Cloud Run y HTTPS: secure=true en producción
     secure: IN_PROD,
     httpOnly: true,
-    sameSite: 'lax',
+    sameSite: 'none',
     maxAge: 24 * 60 * 60 * 1000 // 1 día
   }
 }));
