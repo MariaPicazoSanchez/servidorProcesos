@@ -115,15 +115,16 @@ app.get('/test-session', (req, res) => {
 });
 
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'dev-secret',
+ name: 'sid',
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
+  proxy: IN_PROD,
   cookie: {
-    // Cloud Run y HTTPS: secure=true en producción
-    secure: IN_PROD,
     httpOnly: true,
-    sameSite: 'none',
-    maxAge: 24 * 60 * 60 * 1000 // 1 día
+    secure: true,        // en Cloud Run SIEMPRE true
+    sameSite: 'none',    // clave para cross-site (cliente<->servidor)
+    maxAge: 24 * 60 * 60 * 1000
   }
 }));
 
